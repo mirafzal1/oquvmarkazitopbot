@@ -11,13 +11,14 @@ $username = "bunnypeace_oquvm";
 
 $databasename = "bunnypeace_oquvm";
 
-
 global $db;
 
 setlocale(LC_ALL,"ru_RU.UTF8");
 
 
 $db = new mysqli($host, $username, $password, $databasename, 3306);
+$db->set_charset('utf8mb4');
+
 
 if ($db->connect_errno) {
 

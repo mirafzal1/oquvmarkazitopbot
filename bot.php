@@ -1,10 +1,12 @@
 <?php
 
 require_once 'Telegram.php';
-require_once 'user.php';
-require_once 'texts.php';
-require_once 'districts.php';
-require_once 'subjects.php';
+require_once 'User.php';
+require_once 'Pages.php';
+require_once 'Districts.php';
+require_once 'Subjects.php';
+require_once 'Texts.php';
+require_once 'TrainingCenters.php';
 
 $telegram = new Telegram('1185070666:AAGrSmjGgvqlCNBdkTr-HnMyP-cExeQr9oI');
 
@@ -16,44 +18,50 @@ $chat_id = $message['chat']['id'];
 $callback_data = $telegram->Callback_Data();
 $callback_query = $telegram->Callback_Query();
 
+$user = new User($chat_id);
+$districts = new Districts($user->getLanguage());
+$subjects = new Subjects($user->getLanguage());
+$texts = new Texts($user->getLanguage());
+
+
 if ($text == "/start") {
     chooseLanguage();
 } else {
-    switch (getPage($chat_id)) {
-        case 'start':
+    switch ($user->getPage()) {
+        case Pages::START:
             if ($text == "Русский 🇷🇺") {
-                setLanguage($chat_id, "ru");
+                $user->setLanguage("ru");
                 showMainPage();
             } elseif ($text == "O'zbek tili 🇺🇿") {
-                setLanguage($chat_id, "uz");
+                $user->setLanguage("uz");
                 showMainPage();
             } else {
                 chooseButtons();
             }
             break;
-        case 'main':
+        case Pages::MAIN:
             switch ($text) {
-                case "🔖 " . getmText('choose_training_center', $chat_id):
+                case $texts->getText('choose_training_center'):
                     showDistricts();
                     break;
-                case "💎 " . getmText('training_centers_list', $chat_id):
+                case $texts->getText('training_centers_list'):
                     // TODO
                     break;
-                case "🇺🇿🔄🇷🇺 " . getmText('change_lang', $chat_id):
+                case $texts->getText('change_lang'):
                     changeLanguage();
                     break;
 
             }
             break;
-        case 'districts':
+        case Pages::DISTRICTS:
             switch ($text) {
-                case "🔙 " . getmText("back", $chat_id):
-                case "🔙 " . getmText("main_page", $chat_id):
+                case $texts->getText('back'):
+                case $texts->getText('main_page'):
                     showMainPage();
                     break;
                 default:
-                    if (in_array(substr($text, 5), getDistricts($chat_id))) {
-                        setDistrict($chat_id, $text);
+                    if (in_array(substr($text, 5), $districts->getNames())) {
+                        $user->setDistrict($districts->getKeyword(substr($text, 5)));
                         showSubjects();
                     } else {
                         chooseButtons();
@@ -61,17 +69,17 @@ if ($text == "/start") {
                     break;
             }
             break;
-        case 'subjects':
+        case Pages::SUBJECTS:
             switch ($text) {
-                case "🔙 " . getmText("back", $chat_id):
+                case $texts->getText('back'):
                     showDistricts();
                     break;
-                case "🔙 " . getmText("main_page", $chat_id):
+                case $texts->getText('main_page'):
                     showMainPage();
                     break;
                 default:
-                    if (in_array(substr($text, 7), getSubjects($chat_id))) {
-//                        setSubject($chat_id, $text);
+                    if (in_array((substr($text, 7)), $subjects->getNames())) {
+                        $user->setSubject($subjects->getKeyword(substr($text, 7)));
                         showTrainingCentres();
                     } else {
                         chooseButtons();
@@ -79,17 +87,16 @@ if ($text == "/start") {
                     break;
             }
             break;
-            break;
     }
 }
 
 function chooseLanguage()
 {
-    global $telegram, $chat_id;
+    global $telegram, $chat_id, $user;
 
     $text = "Пожалуйста выберите язык.\nIltimos, tilni tanlang.";
 
-    setPage($chat_id, 'start');
+    $user->setPage(Pages::START);
 
     $option = array(
         array($telegram->buildKeyboardButton("Русский 🇷🇺"), $telegram->buildKeyboardButton("O'zbek tili 🇺🇿")),
@@ -101,15 +108,17 @@ function chooseLanguage()
 
 function showMainPage()
 {
-    global $telegram, $chat_id;
+    global $telegram, $chat_id, $user, $texts;
 
-    $text = getmText('choose_category', $chat_id);
+    $texts = new Texts($user->getLanguage());
 
-    setPage($chat_id, 'main');
+    $text = $texts->getText('choose_category');
+
+    $user->setPage(Pages::MAIN);
 
     $option = array(
-        array($telegram->buildKeyboardButton("🔖 " . getmText('choose_training_center', $chat_id)), $telegram->buildKeyboardButton("💎 " . getmText('training_centers_list', $chat_id))),
-        array($telegram->buildKeyboardButton("🇺🇿🔄🇷🇺 " . getmText('change_lang', $chat_id))),
+        array($telegram->buildKeyboardButton($texts->getText('choose_training_center')), $telegram->buildKeyboardButton($texts->getText('training_centers_list'))),
+        array($telegram->buildKeyboardButton($texts->getText('change_lang'))),
     );
     $keyb = $telegram->buildKeyBoard($option, $onetime = false, $resize = true);
     $content = array('chat_id' => $chat_id, 'text' => $text, 'reply_markup' => $keyb);
@@ -118,42 +127,47 @@ function showMainPage()
 
 function showDistricts()
 {
-    global $chat_id;
-    $text = getmText('choose_district', $chat_id);
-    setPage($chat_id, 'districts');
-    $districts = getDistricts($chat_id);
-    sendTextWithKeyboard($districts, $text, "📍 ");
+    global $user, $districts, $texts;
+    $text = $texts->getText('choose_district');
+    $user->setPage(Pages::DISTRICTS);
+    sendTextWithKeyboard($districts->getNames(), $text, "📍 ");
 }
 
 function showSubjects()
 {
-    global $chat_id;
-    $text = getmText('choose_subject', $chat_id);
-    setPage($chat_id, 'subjects');
-    $subjects = getSubjects($chat_id);
-    sendTextWithKeyboard($subjects, $text, "▫️ ");
+    global $user, $subjects, $texts;
+    $text = $texts->getText('choose_subject');
+    $user->setPage(Pages::SUBJECTS);
+    sendTextWithKeyboard($subjects->getNames(), $text, "▫️ ");
 }
 
 function showTrainingCentres()
 {
-    global $telegram, $chat_id;
-    $training_centers = getTrainingCenters();
-    $option = [
-        [$telegram->buildInlineKeyboardButton()]
-    ];
-    $keyb = $telegram->buildInlineKeyBoard($option);
-    $content = array('chat_id' => $chat_id, 'text' => "test uchun", 'reply_markup' => $keyb);
-    $telegram->sendMessage($content);
+    global $telegram, $chat_id, $user, $texts;
+    $text = $texts->getText('choose_tc_text');
+    $trainingCentersList = TrainingCenters::getNames($user->getDistrict(), $user->getSubject());
+    if (!$trainingCentersList) {
+        $content = array('chat_id' => $chat_id, 'text' => $texts->getText('no_tc'));
+        $telegram->sendMessage($content);
+    } else {
+        $option = [];
+        foreach ($trainingCentersList as $item) {
+            $option[] = [$telegram->buildInlineKeyboardButton("☑️".$item."☑️", "", $item)];
+        }
+        $keyb = $telegram->buildInlineKeyBoard($option);
+        $content = array('chat_id' => $chat_id, 'text' => $text, 'reply_markup' => $keyb);
+        $telegram->sendMessage($content);
+    }
 }
 
 function sendTextWithKeyboard($buttons, $text, $smile)
 {
-    global $telegram, $chat_id;
+    global $telegram, $chat_id, $texts;
     $option = [];
     for ($i = 0; $i < count($buttons); $i += 2) {
         $option[] = [$telegram->buildKeyboardButton($smile . $buttons[$i]), $telegram->buildKeyboardButton($smile . $buttons[$i + 1])];
     }
-    $option[] = [$telegram->buildKeyboardButton("🔙 " . getmText("back", $chat_id)), $telegram->buildKeyboardButton("🔙 " . getmText("main_page", $chat_id))];
+    $option[] = [$telegram->buildKeyboardButton($texts->getText('back')), $telegram->buildKeyboardButton($texts->getText('main_page'))];
     $keyb = $telegram->buildKeyBoard($option, $onetime = false, $resize = true);
     $content = array('chat_id' => $chat_id, 'text' => $text, 'reply_markup' => $keyb);
     $telegram->sendMessage($content);
@@ -161,11 +175,11 @@ function sendTextWithKeyboard($buttons, $text, $smile)
 
 function changeLanguage()
 {
-    global $chat_id;
-    if (getLanguage($chat_id) == "uz") {
-        setLanguage($chat_id, "ru");
+    global $user;
+    if ($user->getLanguage() == "uz") {
+        $user->setLanguage("ru");
     } else {
-        setLanguage($chat_id, "uz");
+        $user->setLanguage("uz");
     }
     showMainPage();
 }
